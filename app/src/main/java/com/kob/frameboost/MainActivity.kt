@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Typeface
+import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -36,6 +37,7 @@ class MainActivity : Activity() {
     private lateinit var tvUpdate: TextView
     private lateinit var btnUpdate: Button
     private lateinit var btnOverlay: Button
+    private lateinit var btnCapture: Button
 
     private var maxHz = 60f
     private var ramGb = 0.0
@@ -82,6 +84,13 @@ class MainActivity : Activity() {
         }
         root.addView(btnOverlay, matchWrap(top = 4))
         refreshOverlayButton()
+
+        // ปุ่มทดสอบจับภาพหน้าจอ (ขั้นที่ 1 ของตัวสร้างเฟรม)
+        btnCapture = Button(this).apply {
+            setOnClickListener { toggleCapture() }
+        }
+        root.addView(btnCapture, matchWrap(top = 4))
+        refreshCaptureButton()
 
         // ข้อมูลเครื่อง + พรีเซ็ต
         val rec = recommendedPreset()
@@ -151,6 +160,37 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         refreshOverlayButton()
+        refreshCaptureButton()
+    }
+
+    // ---------- capture (ทดสอบ) ----------
+
+    private fun refreshCaptureButton() {
+        btnCapture.text = if (CaptureService.running) "หยุดจับภาพ" else "เริ่มจับภาพ (ทดสอบตัวสร้างเฟรม)"
+    }
+
+    private fun toggleCapture() {
+        if (CaptureService.running) {
+            CaptureService.stop(this)
+            btnCapture.text = "เริ่มจับภาพ (ทดสอบตัวสร้างเฟรม)"
+            return
+        }
+        val mpm = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        @Suppress("DEPRECATION")
+        startActivityForResult(mpm.createScreenCaptureIntent(), 77)
+    }
+
+    @Suppress("DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 77) {
+            if (resultCode == RESULT_OK && data != null) {
+                CaptureService.start(this, resultCode, data)
+                btnCapture.text = "หยุดจับภาพ"
+            } else {
+                Toast.makeText(this, "ไม่ได้อนุญาตจับภาพหน้าจอ", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     // ---------- overlay monitor ----------

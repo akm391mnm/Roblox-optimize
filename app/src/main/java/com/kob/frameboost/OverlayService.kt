@@ -210,7 +210,8 @@ class OverlayService : Service() {
         if (r == null) "$label N/A" else "$label ${if (r.estimated) "~" else ""}${r.pct}%"
 
     private fun render() {
-        tv?.text = "FPS $fps\n${fmt("CPU", cpu)}\n${fmt("GPU", gpu)}"
+        val cap = if (CaptureService.running) "\nCAP ${CaptureService.captureFps}" else ""
+        tv?.text = "FPS $fps\n${fmt("CPU", cpu)}\n${fmt("GPU", gpu)}$cap"
     }
 
     // ---------- notification ----------
