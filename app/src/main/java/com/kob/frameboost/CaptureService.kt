@@ -19,6 +19,10 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
 import android.util.DisplayMetrics
+import android.view.Gravity
+import android.view.SurfaceHolder
+import android.view.SurfaceView
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 
@@ -37,10 +41,11 @@ class CaptureService : Service() {
         private const val CHANNEL = "capture"
         private const val NOTIF_ID = 1002
 
-        fun start(ctx: Context, resultCode: Int, data: Intent) {
+        fun start(ctx: Context, resultCode: Int, data: Intent, mirror: Boolean = false) {
             val i = Intent(ctx, CaptureService::class.java)
                 .putExtra("code", resultCode)
                 .putExtra("data", data)
+                .putExtra("mirror", mirror)
             ContextCompat.startForegroundService(ctx, i)
         }
 
@@ -53,6 +58,7 @@ class CaptureService : Service() {
     private var display: VirtualDisplay? = null
     private var reader: ImageReader? = null
     private var worker: HandlerThread? = null
+    private var mirrorView: SurfaceView? = null
     private var count = 0
     private var lastNs = 0L
 
@@ -73,7 +79,8 @@ class CaptureService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        if (!begin(code, data)) {
+        val mirror = intent?.getBooleanExtra("mirror", false) ?: false
+        if (!begin(code, data, mirror)) {
             Toast.makeText(this, "เริ่มจับภาพไม่สำเร็จ", Toast.LENGTH_LONG).show()
             stopSelf()
             return START_NOT_STICKY
@@ -82,7 +89,7 @@ class CaptureService : Service() {
     }
 
     @Suppress("DEPRECATION")
-    private fun begin(code: Int, data: Intent): Boolean {
+    private fun begin(code: Int, data: Intent, mirror: Boolean): Boolean {
         return try {
             val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
             val proj = mpm.getMediaProjection(code, data)
@@ -110,6 +117,13 @@ class CaptureService : Service() {
             val hh = ((dm.heightPixels * f).toInt() / 2) * 2
             captureSize = "${w}x$hh"
 
+            if (mirror) {
+                startMirror(proj, w, hh, dm.densityDpi, h)
+                captureFps = 0
+                running = true
+                return true
+            }
+
             val r = ImageReader.newInstance(w, hh, PixelFormat.RGBA_8888, 3)
             reader = r
             r.setOnImageAvailableListener({ ir ->
@@ -133,6 +147,44 @@ class CaptureService : Service() {
         }
     }
 
+    /**
+     * โหมดทดสอบภาพสะท้อน: ส่งภาพที่จับได้ไปแสดงทับเต็มจอทันที (แตะทะลุได้)
+     * ใช้ดูว่าภาพที่จับได้ "เห็นหน้าต่างของเราเองซ้ำ" (ภาพวนเป็นอุโมงค์/มีเงาตาม) หรือเปล่า
+     */
+    private fun startMirror(proj: MediaProjection, w: Int, hh: Int, dpi: Int, h: Handler) {
+        val wm = getSystemService(WINDOW_SERVICE) as WindowManager
+        val sv = SurfaceView(this)
+        sv.holder.setFixedSize(w, hh)
+        sv.holder.addCallback(object : SurfaceHolder.Callback {
+            override fun surfaceCreated(holder: SurfaceHolder) {
+                display = proj.createVirtualDisplay(
+                    "frameboost-mirror", w, hh, dpi,
+                    DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                    holder.surface, null, h
+                )
+            }
+
+            override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
+
+            override fun surfaceDestroyed(holder: SurfaceHolder) {
+                display?.release()
+                display = null
+            }
+        })
+        val lp = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT
+        ).apply { gravity = Gravity.TOP or Gravity.START }
+        wm.addView(sv, lp)
+        mirrorView = sv
+    }
+
     private fun onFrame() {
         val now = System.nanoTime()
         if (lastNs == 0L) lastNs = now
@@ -148,6 +200,13 @@ class CaptureService : Service() {
     override fun onDestroy() {
         running = false
         captureFps = 0
+        mirrorView?.let {
+            try {
+                (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(it)
+            } catch (e: Exception) {
+            }
+        }
+        mirrorView = null
         try { display?.release() } catch (e: Exception) {}
         try { reader?.close() } catch (e: Exception) {}
         try { projection?.stop() } catch (e: Exception) {}

@@ -38,6 +38,7 @@ class MainActivity : Activity() {
     private lateinit var btnUpdate: Button
     private lateinit var btnOverlay: Button
     private lateinit var btnCapture: Button
+    private lateinit var btnMirror: Button
 
     private var maxHz = 60f
     private var ramGb = 0.0
@@ -90,6 +91,11 @@ class MainActivity : Activity() {
             setOnClickListener { toggleCapture() }
         }
         root.addView(btnCapture, matchWrap(top = 4))
+        btnMirror = Button(this).apply {
+            text = "ทดสอบภาพสะท้อน (เช็กภาพวน)"
+            setOnClickListener { toggleMirror() }
+        }
+        root.addView(btnMirror, matchWrap(top = 4))
         refreshCaptureButton()
 
         // ข้อมูลเครื่อง + พรีเซ็ต
@@ -169,6 +175,17 @@ class MainActivity : Activity() {
         btnCapture.text = if (CaptureService.running) "หยุดจับภาพ" else "เริ่มจับภาพ (ทดสอบตัวสร้างเฟรม)"
     }
 
+    private fun toggleMirror() {
+        if (CaptureService.running) {
+            CaptureService.stop(this)
+            refreshCaptureButton()
+            return
+        }
+        val mpm = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        @Suppress("DEPRECATION")
+        startActivityForResult(mpm.createScreenCaptureIntent(), 78)
+    }
+
     private fun toggleCapture() {
         if (CaptureService.running) {
             CaptureService.stop(this)
@@ -183,9 +200,9 @@ class MainActivity : Activity() {
     @Suppress("DEPRECATION")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == 77) {
+        if (requestCode == 77 || requestCode == 78) {
             if (resultCode == RESULT_OK && data != null) {
-                CaptureService.start(this, resultCode, data)
+                CaptureService.start(this, resultCode, data, mirror = requestCode == 78)
                 btnCapture.text = "หยุดจับภาพ"
             } else {
                 Toast.makeText(this, "ไม่ได้อนุญาตจับภาพหน้าจอ", Toast.LENGTH_SHORT).show()
