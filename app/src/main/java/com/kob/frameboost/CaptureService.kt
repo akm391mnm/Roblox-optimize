@@ -59,6 +59,7 @@ class CaptureService : Service() {
     private var reader: ImageReader? = null
     private var worker: HandlerThread? = null
     private var mirrorView: SurfaceView? = null
+    private var mirrorWm: WindowManager? = null
     private var count = 0
     private var lastNs = 0L
 
@@ -152,8 +153,11 @@ class CaptureService : Service() {
      * ใช้ดูว่าภาพที่จับได้ "เห็นหน้าต่างของเราเองซ้ำ" (ภาพวนเป็นอุโมงค์/มีเงาตาม) หรือเปล่า
      */
     private fun startMirror(proj: MediaProjection, w: Int, hh: Int, dpi: Int, h: Handler) {
-        val wm = getSystemService(WINDOW_SERVICE) as WindowManager
-        val sv = SurfaceView(this)
+        // ถ้าเปิด Accessibility ไว้ ใช้หน้าต่างชนิดเชื่อถือได้ (แตะทะลุได้ ไม่ต้องลดความทึบ)
+        val a11y = FrameBoostAccessibility.instance
+        val ctx: Context = a11y ?: this
+        val wm = ctx.getSystemService(WINDOW_SERVICE) as WindowManager
+        val sv = SurfaceView(ctx)
         sv.holder.setFixedSize(w, hh)
         sv.holder.addCallback(object : SurfaceHolder.Callback {
             override fun surfaceCreated(holder: SurfaceHolder) {
@@ -174,7 +178,8 @@ class CaptureService : Service() {
         val lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            if (a11y != null) WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
+            else WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
@@ -183,10 +188,11 @@ class CaptureService : Service() {
         ).apply {
             gravity = Gravity.TOP or Gravity.START
             // Android 12+ บล็อกการแตะที่ทะลุหน้าต่างแอปอื่น ถ้าความทึบเกิน 0.8
-            alpha = 0.79f
+            alpha = if (a11y != null) 1.0f else 0.79f
         }
         wm.addView(sv, lp)
         mirrorView = sv
+        mirrorWm = wm
     }
 
     private fun onFrame() {
@@ -206,11 +212,12 @@ class CaptureService : Service() {
         captureFps = 0
         mirrorView?.let {
             try {
-                (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(it)
+                (mirrorWm ?: (getSystemService(WINDOW_SERVICE) as WindowManager)).removeView(it)
             } catch (e: Exception) {
             }
         }
         mirrorView = null
+        mirrorWm = null
         try { display?.release() } catch (e: Exception) {}
         try { reader?.close() } catch (e: Exception) {}
         try { projection?.stop() } catch (e: Exception) {}

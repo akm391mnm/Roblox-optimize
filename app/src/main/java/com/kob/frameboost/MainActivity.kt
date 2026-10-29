@@ -39,6 +39,7 @@ class MainActivity : Activity() {
     private lateinit var btnOverlay: Button
     private lateinit var btnCapture: Button
     private lateinit var btnMirror: Button
+    private lateinit var btnA11y: Button
 
     private var maxHz = 60f
     private var ramGb = 0.0
@@ -96,6 +97,13 @@ class MainActivity : Activity() {
             setOnClickListener { toggleMirror() }
         }
         root.addView(btnMirror, matchWrap(top = 4))
+
+        btnA11y = Button(this).apply {
+            setOnClickListener {
+                startActivity(Intent(AndroidSettings.ACTION_ACCESSIBILITY_SETTINGS))
+            }
+        }
+        root.addView(btnA11y, matchWrap(top = 4))
         refreshCaptureButton()
 
         // ข้อมูลเครื่อง + พรีเซ็ต
@@ -172,6 +180,11 @@ class MainActivity : Activity() {
     // ---------- capture (ทดสอบ) ----------
 
     private fun refreshCaptureButton() {
+        btnA11y.text = if (FrameBoostAccessibility.instance != null) {
+            "Accessibility: เปิดอยู่ ✓"
+        } else {
+            "เปิดสิทธิ์ Accessibility (ให้แตะทะลุ overlay)"
+        }
         btnCapture.text = if (CaptureService.running) "หยุดจับภาพ" else "เริ่มจับภาพ (ทดสอบตัวสร้างเฟรม)"
     }
 
