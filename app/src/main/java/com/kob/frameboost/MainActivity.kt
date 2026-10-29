@@ -1,11 +1,14 @@
 package com.kob.frameboost
 
+import android.Manifest
 import android.app.Activity
 import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Typeface
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings as AndroidSettings
 import android.view.View
@@ -17,6 +20,7 @@ import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.Spinner
 import android.widget.TextView
+import android.widget.Toast
 
 class MainActivity : Activity() {
 
@@ -31,6 +35,7 @@ class MainActivity : Activity() {
     private lateinit var tvHint: TextView
     private lateinit var tvUpdate: TextView
     private lateinit var btnUpdate: Button
+    private lateinit var btnOverlay: Button
 
     private var maxHz = 60f
     private var ramGb = 0.0
@@ -41,6 +46,12 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         cfg = AppSettings(this)
         readDeviceInfo()
+
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+        }
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -64,6 +75,13 @@ class MainActivity : Activity() {
             text = "เปิด Roblox"
             setOnClickListener { RobloxLauncher.launch(this@MainActivity) }
         }, matchWrap(top = 12))
+
+        // ปุ่มหน้าต่างมอนิเตอร์ (FPS / CPU / GPU)
+        btnOverlay = Button(this).apply {
+            setOnClickListener { toggleOverlay() }
+        }
+        root.addView(btnOverlay, matchWrap(top = 4))
+        refreshOverlayButton()
 
         // ข้อมูลเครื่อง + พรีเซ็ต
         val rec = recommendedPreset()
@@ -128,6 +146,37 @@ class MainActivity : Activity() {
 
         setContentView(ScrollView(this).apply { addView(root) })
         updateHint()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refreshOverlayButton()
+    }
+
+    // ---------- overlay monitor ----------
+
+    private fun refreshOverlayButton() {
+        btnOverlay.text = if (OverlayService.running) "ปิดหน้าต่างมอนิเตอร์" else "เปิดหน้าต่างมอนิเตอร์ (FPS / CPU / GPU)"
+    }
+
+    private fun toggleOverlay() {
+        if (OverlayService.running) {
+            OverlayService.stop(this)
+            btnOverlay.text = "เปิดหน้าต่างมอนิเตอร์ (FPS / CPU / GPU)"
+            return
+        }
+        if (!AndroidSettings.canDrawOverlays(this)) {
+            Toast.makeText(this, "ต้องอนุญาต \"แสดงทับแอปอื่น\" ก่อน แล้วกลับมากดปุ่มอีกครั้ง", Toast.LENGTH_LONG).show()
+            startActivity(
+                Intent(
+                    AndroidSettings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:$packageName")
+                )
+            )
+            return
+        }
+        OverlayService.start(this)
+        btnOverlay.text = "ปิดหน้าต่างมอนิเตอร์"
     }
 
     // ---------- UI helpers ----------

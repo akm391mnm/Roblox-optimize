@@ -28,4 +28,12 @@ class AppSettings(ctx: Context) {
     var sharp: Int
         get() = p.getInt("sharp", 50)
         set(v) = p.edit().putInt("sharp", v).apply()
+
+    var overlayX: Int
+        get() = p.getInt("overlayX", -1)
+        set(v) = p.edit().putInt("overlayX", v).apply()
+
+    var overlayY: Int
+        get() = p.getInt("overlayY", -1)
+        set(v) = p.edit().putInt("overlayY", v).apply()
 }
