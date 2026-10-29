@@ -180,7 +180,11 @@ class CaptureService : Service() {
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
-        ).apply { gravity = Gravity.TOP or Gravity.START }
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            // Android 12+ บล็อกการแตะที่ทะลุหน้าต่างแอปอื่น ถ้าความทึบเกิน 0.8
+            alpha = 0.79f
+        }
         wm.addView(sv, lp)
         mirrorView = sv
     }
